@@ -1,0 +1,49 @@
+name: Daily 5-Lens Bible Study Publisher
+
+on:
+  schedule:
+    - cron: '0 23 * * *' # Runs at 6:00 AM ICT (UTC+7) daily
+  workflow_dispatch:      # Allows manual 1-click test runs
+
+permissions:
+  contents: write
+
+jobs:
+  generate-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Google GenAI SDK
+        run: pip install google-genai
+
+      - name: Generate Daily 5-Lens Study
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python generate_study.py
+
+      - name: Commit and Push to Public GitHub Repo
+        run: |
+          git config user.name "5-Lens Bible Bot"
+          git config user.email "actions@github.com"
+          git add studies/
+          git commit -m "Add 5-Lens Study: ${{ env.TARGET_CHAPTER }}"
+          git push
+
+      - name: Send Public URL & Prompt to Mobile (via ntfy.sh)
+        if: env.NTFY_TOPIC != ''
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          PUBLIC_URL="https://github.com/${{ github.repository }}/blob/main/${{ env.STUDY_FILE }}"
+          curl -H "Title: 📖 ${{ env.TARGET_CHAPTER }} 5-Lens Study Ready" \
+               -H "Click: $PUBLIC_URL" \
+               -H "Tags: book,sparkles" \
+               -d "Your daily study for ${{ env.TARGET_CHAPTER }} is live on GitHub: $PUBLIC_URL" \
+               ntfy.sh/$NTFY_TOPIC
